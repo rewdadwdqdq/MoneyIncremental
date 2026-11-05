@@ -1,266 +1,128 @@
+                    f"**{RARITY_EMOJI.get(pet['rarity'], '🐾')} {pet['name']}**  \n"
+                    f"{pet['rarity']} · x{pet['multiplier']} · {pet['world']}"
+                )
+                p2.write("✅ Equipped" if is_equipped else "In inventory")
+                if is_equipped:
+                    if p3.button("Unequip", key=f"unequip_{pet['id']}"):
+                        data["equipped"].remove(pet["id"])
+                        save_player(username, data)
+                        st.rerun()
+                else:
+                    if p3.button("Equip", key=f"equip_{pet['id']}", disabled=len(data["equipped"]) >= MAX_EQUIPPED):
+                        data["equipped"].append(pet["id"])
+                        save_player(username, data)
+                        st.rerun()
+    st.caption("Equip up to 3 pets. Their bonuses add together.")
 
-import streamlit as st
-import streamlit.components.v1 as components
-import time
+# WORLDS
+with tabs[4]:
+    st.subheader("🌍 Explore new worlds")
+    st.write("Unlock worlds with money. Each world has its own egg and pets.")
+    for item in WORLDS:
+        unlocked = item["name"] in data["unlocked_worlds"]
+        current = item["name"] == data["current_world"]
+        with st.container(border=True):
+            w1, w2, w3 = st.columns([2, 1, 1])
+            w1.markdown(f"### {item['emoji']} {item['name']}")
+            w1.caption(f"Egg price: {fmt(item['egg_cost'])}")
+            if current:
+                w2.success("Current world")
+            elif unlocked:
+                w2.info("Unlocked")
+            else:
+                w2.write(f"Unlock: **{fmt(item['cost'])}**")
+            if current:
+                w3.button("CURRENT", key=f"world_{item['name']}", disabled=True)
+            elif unlocked:
+                if w3.button("TRAVEL", key=f"travel_{item['name']}"):
+                    data["current_world"] = item["name"]
+                    save_player(username, data)
+                    st.rerun()
+            else:
+                if w3.button("UNLOCK", key=f"unlock_{item['name']}"):
+                    if data["money"] >= item["cost"]:
+                        data["money"] -= item["cost"]
+                        data["unlocked_worlds"].append(item["name"])
+                        data["current_world"] = item["name"]
+                        save_player(username, data)
+                        st.success(f"{item['name']} unlocked!")
+                        st.rerun()
+                    else:
+                        st.error(f"Need {fmt(item['cost'] - data['money'])} more.")
 
-st.set_page_config(
-    page_title="Money Incremental",
-    page_icon="💰",
-    layout="wide"
-)
-
-# -------------------------
-# GAME DATA
-# -------------------------
-
-if "money" not in st.session_state:
-    st.session_state.money = 0
-    st.session_state.click_power = 1
-    st.session_state.auto_power = 0
-    st.session_state.multiplier = 1
-    st.session_state.rebirths = 0
-    st.session_state.last_update = time.time()
-
-# -------------------------
-# GAME CALCULATIONS
-# -------------------------
-
-now = time.time()
-elapsed = now - st.session_state.last_update
-
-st.session_state.money += (
-    elapsed *
-    st.session_state.auto_power *
-    st.session_state.multiplier
-)
-
-st.session_state.last_update = now
-
-money = st.session_state.money
-
-# -------------------------
-# HTML AND CSS
-# -------------------------
-
-st.markdown("""
-<style>
-.stApp {
-    background: linear-gradient(135deg, #10172a, #202d49);
-    color: white;
-}
-
-h1, h2, h3, p, label {
-    color: white !important;
-}
-
-div.stButton > button {
-    width: 100%;
-    height: 65px;
-    border-radius: 15px;
-    border: none;
-    background: linear-gradient(90deg, #00c853, #64dd17);
-    color: white;
-    font-size: 22px;
-    font-weight: bold;
-    transition: 0.2s;
-}
-
-div.stButton > button:hover {
-    transform: scale(1.03);
-    background: #00e676;
-    color: white;
-}
-
-.game-card {
-    background: #263653;
-    padding: 22px;
-    border-radius: 18px;
-    text-align: center;
-    border: 1px solid #435577;
-}
-
-.money {
-    font-size: 42px;
-    font-weight: bold;
-    color: #69f0ae;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-# -------------------------
-# HEADER
-# -------------------------
-
-st.title("💰 MONEY INCREMENTAL")
-st.caption("Earn money. Buy upgrades. Become rich.")
-
-# -------------------------
-# PLAYER STATS
-# -------------------------
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.markdown(f"""
-    <div class="game-card">
-        <h3>💵 Total Money</h3>
-        <div class="money">${st.session_state.money:,.1f}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col2:
-    st.markdown(f"""
-    <div class="game-card">
-        <h3>👆 Click Power</h3>
-        <div class="money">+{st.session_state.click_power * st.session_state.multiplier}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col3:
-    st.markdown(f"""
-    <div class="game-card">
-        <h3>⚡ Auto Income</h3>
-        <div class="money">${st.session_state.auto_power * st.session_state.multiplier}/s</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.divider()
-
-# -------------------------
-# CLICK BUTTON
-# -------------------------
-
-st.subheader("💸 Earn Money")
-
-if st.button("💰 CLICK TO EARN MONEY"):
-    st.session_state.money += (
-        st.session_state.click_power *
-        st.session_state.multiplier
+# DAILY REWARDS
+with tabs[5]:
+    st.subheader("🎁 Daily login reward")
+    today = date.today()
+    last_claim = data.get("daily_last_claim", "")
+    claimed_today = last_claim == today.isoformat()
+    yesterday = (today - timedelta(days=1)).isoformat()
+    next_streak = data["daily_streak"] + 1 if last_claim == yesterday else 1
+    reward = 500 * min(next_streak, 7)
+    st.markdown(
+        f'<div class="pet-card"><h2>🎁 Day {next_streak} reward</h2>'
+        f'<h1 style="color:#72f1bd">{fmt(reward)}</h1>'
+        f'<p>Current streak: {data["daily_streak"]} day(s)</p></div>',
+        unsafe_allow_html=True,
     )
+    if claimed_today:
+        st.success("You already claimed today's reward. Come back tomorrow!")
+    elif st.button("CLAIM DAILY REWARD", use_container_width=True):
+        data["daily_streak"] = next_streak
+        data["daily_last_claim"] = today.isoformat()
+        add_money(data, reward)
+        save_player(username, data)
+        st.success(f"You received {fmt(reward)}!")
+        st.rerun()
+    st.caption("The reward streak grows up to 7 days, then stays at the day-7 reward.")
 
-# -------------------------
-# UPGRADE SHOP
-# -------------------------
-
-st.divider()
-st.header("🏪 Upgrade Shop")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader("👆 Click Upgrade")
-
-    click_cost = 25 * (st.session_state.click_power ** 2)
-
-    st.write(f"Increase click power by 1")
-    st.write(f"Cost: ${click_cost:,.0f}")
-
-    if st.button("BUY CLICK UPGRADE"):
-        if st.session_state.money >= click_cost:
-            st.session_state.money -= click_cost
-            st.session_state.click_power += 1
-            st.success("Click power upgraded!")
+# QUESTS
+with tabs[6]:
+    st.subheader("📜 Quests")
+    st.caption("Complete objectives to earn bonus cash. Each quest can be claimed once in this prototype.")
+    for quest in QUESTS:
+        progress = data["stats"].get(quest["stat"], 0)
+        completed = progress >= quest["target"]
+        claimed = quest["id"] in data["claimed_quests"]
+        st.markdown(f"**{quest['title']}** — {quest['description']}")
+        st.progress(min(progress / quest["target"], 1.0))
+        st.caption(f"{progress:,.0f} / {quest['target']:,.0f} · Reward: {fmt(quest['reward'])}")
+        if claimed:
+            st.success("Reward claimed")
+        elif completed:
+            if st.button(f"CLAIM {fmt(quest['reward'])}", key=f"quest_{quest['id']}"):
+                add_money(data, quest["reward"])
+                data["claimed_quests"].append(quest["id"])
+                save_player(username, data)
+                st.rerun()
         else:
-            st.error("Not enough money!")
+            st.info("Keep playing to complete this quest.")
+        st.divider()
 
-with col2:
-    st.subheader("⚡ Auto Generator")
+# ACHIEVEMENTS
+with tabs[7]:
+    st.subheader("🏆 Achievements")
+    for achievement in ACHIEVEMENTS:
+        progress = data["stats"].get(achievement["stat"], 0)
+        completed = progress >= achievement["target"]
+        claimed = achievement["id"] in data["claimed_achievements"]
+        with st.container(border=True):
+            st.markdown(f"**{'🏅' if completed else '🔒'} {achievement['title']}**")
+            st.caption(achievement["description"])
+            st.progress(min(progress / achievement["target"], 1.0))
+            st.caption(f"{progress:,.0f} / {achievement['target']:,.0f} · Reward: {fmt(achievement['reward'])}")
+            if claimed:
+                st.success("Claimed")
+            elif completed:
+                if st.button(f"CLAIM {fmt(achievement['reward'])}", key=f"achievement_{achievement['id']}"):
+                    add_money(data, achievement["reward"])
+                    data["claimed_achievements"].append(achievement["id"])
+                    save_player(username, data)
+                    st.rerun()
 
-    auto_cost = 100 * (st.session_state.auto_power + 1) ** 2
+# Save automatically after each rerun, including passive income.
+save_player(username, data)
 
-    st.write("Generate passive income every second")
-    st.write(f"Cost: ${auto_cost:,.0f}")
-
-    if st.button("BUY AUTO GENERATOR"):
-        if st.session_state.money >= auto_cost:
-            st.session_state.money -= auto_cost
-            st.session_state.auto_power += 1
-            st.success("Auto generator purchased!")
-        else:
-            st.error("Not enough money!")
-
-# -------------------------
-# MULTIPLIER
-# -------------------------
-
-st.divider()
-st.header("🚀 Money Multiplier")
-
-multiplier_cost = 1000 * st.session_state.multiplier
-
-st.write(f"Current multiplier: x{st.session_state.multiplier}")
-st.write(f"Upgrade cost: ${multiplier_cost:,.0f}")
-
-if st.button("BUY 2X MULTIPLIER"):
-    if st.session_state.money >= multiplier_cost:
-        st.session_state.money -= multiplier_cost
-        st.session_state.multiplier *= 2
-        st.success("Multiplier increased!")
-    else:
-        st.error("Not enough money!")
-
-# -------------------------
-# REBIRTH
-# -------------------------
-
-st.divider()
-st.header("🌟 Rebirth")
-
-rebirth_cost = 100000 * (st.session_state.rebirths + 1)
-
-st.write(f"Rebirth cost: ${rebirth_cost:,.0f}")
-st.write(f"Total rebirths: {st.session_state.rebirths}")
-
-if st.button("🌟 REBIRTH"):
-    if st.session_state.money >= rebirth_cost:
-        st.session_state.money = 0
-        st.session_state.click_power = 1
-        st.session_state.auto_power = 0
-        st.session_state.multiplier = 1
-        st.session_state.rebirths += 1
-
-        st.success("REBIRTH COMPLETE!")
-    else:
-        st.error("You need more money to rebirth!")
-
-# -------------------------
-# HTML ELEMENT EXAMPLE
-# -------------------------
-
-st.divider()
-st.header("🌐 HTML Game Element")
-
-components.html("""
-<div style="
-    background: linear-gradient(135deg,#172b4d,#304f80);
-    border-radius: 20px;
-    padding: 25px;
-    text-align: center;
-    color: white;
-    font-family: Arial;
-">
-    <h2>🏆 MONEY TYCOON</h2>
-    <p>Welcome to your money empire!</p>
-
-    <div style="
-        background: #14213d;
-        padding: 15px;
-        border-radius: 12px;
-    ">
-        <h3>💎 Become The Richest Player!</h3>
-        <p>Click, upgrade, generate and rebirth.</p>
-    </div>
-
-    <p style="color: #69f0ae;">
-        YOUR EMPIRE STARTS HERE
-    </p>
-</div>
-""", height=240)
-
-# -------------------------
-# REFRESH
-# -------------------------
-
-time.sleep(0.5)
-st.rerun()
+st.markdown("---")
+st.markdown(
+    '<p style="text-align:center;color:#9fb2d4;font-size:12px">'
